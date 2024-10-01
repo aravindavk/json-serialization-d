@@ -1,0 +1,6 @@
+name "json-serialization"
+description "JSONValue serialization and deserialization"
+authors "Aravinda VK <vkaravinda7@gmail.com>"
+copyright "Copyright © 2024, Aravinda VK <vkaravinda7@gmail.com>"
+license "MIT"
+targetType "library"

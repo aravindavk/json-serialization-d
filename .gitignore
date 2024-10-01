@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/json-serialization
+json-serialization.so
+json-serialization.dylib
+json-serialization.dll
+json-serialization.a
+json-serialization.lib
+json-serialization-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
