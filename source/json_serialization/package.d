@@ -5,17 +5,18 @@ import std.traits;
 import std.typecons;
 import std.datetime;
 import std.json;
+import std.algorithm : startsWith;
 
 // TODO: Handle Array and Dict
-T fromJSONValue(T)(JSONValue data)
+T deserializeJSONValue(T)(JSONValue data)
 {
     static if (is(T == struct))
         T result;
     else
         T result = new T;
 
- 	alias fieldTypes = FieldTypeTuple!(T);
-	alias fieldNames = FieldNameTuple!(T);
+    alias fieldTypes = FieldTypeTuple!(T);
+    alias fieldNames = FieldNameTuple!(T);
 
     static foreach(idx, fieldName; fieldNames)
     {
@@ -56,40 +57,82 @@ bool isJSONFieldIgnored(T, string member)()
     return hasUDA!(__traits(getMember, T, member), JSONFieldIgnore);
 }
 
-JSONValue toJSONValue(T)(T data)
+string nullableType(T)()
 {
-    JSONValue result;
+    alias types = AliasSeq!(
+        bool,
+        short,
+        ushort,
+        int,
+        uint,
+        long,
+        ulong,
+        char,
+        float,
+        double,
+        real,
+        string
+    );
 
- 	alias fieldTypes = FieldTypeTuple!(T);
-	alias fieldNames = FieldNameTuple!(T);
-	alias fieldValues = data.tupleof;   
-
-    static foreach(idx, fieldName; fieldNames)
+    foreach(t; types)
     {
-        {
-            // TODO: Check if the field is struct/class
-            static if (!isJSONFieldIgnored!(T, fieldName))
-            {
-                // Field name same as memberName unless @JSONFieldName
-                // attribute added to the member.
-                enum name = getJSONFieldName!(T, fieldName);
+        if (is(T == Nullable!t))
+            return t.stringof;
+    }
+    return "string";
+}
 
-                result[fieldName] = JSONValue(fieldValues[idx]);
+JSONValue serializeToJSONValue(T)(T data)
+{
+    static if (isArray!(T))
+    {
+        JSONValue output = JSONValue.emptyArray;
+        foreach(d; data)
+            output.array ~= d.serializeToJSONValue;
+
+        return output;
+    }
+    else
+    {
+        JSONValue result;
+
+        alias fieldTypes = FieldTypeTuple!(T);
+        alias fieldNames = FieldNameTuple!(T);
+        alias fieldValues = data.tupleof;   
+
+        static foreach(idx, fieldName; fieldNames)
+        {
+            {
+                // TODO: Check if the field is struct/class
+                static if (!isJSONFieldIgnored!(T, fieldName))
+                {
+                    // Field name same as memberName unless @JSONFieldName
+                    // attribute added to the member.
+                    enum name = getJSONFieldName!(T, fieldName);
+
+                    static if (fieldTypes[idx].stringof.startsWith("Nullable!"))
+                    {
+                        if (!fieldValues[idx].isNull)
+                            result[name] = JSONValue(fieldValues[idx].get);
+                    }
+                    else
+                        result[name] = JSONValue(fieldValues[idx]);
+                }
             }
         }
+
+        return result;
     }
-
-    return result;
 }
 
-string toJSONValueString(T)(T data)
+string serializeToJSONValueString(T)(T data)
 {
-    return data.toJSONValue.toString;
+    return data.serializeToJSONValue.toString;
 }
 
-T fromJSONValueString(T)(string data)
+T deserializeJSONValueString(T)(string data)
 {
-     return fromJSONValue!T(parseJSON(data));
+     return deserializeJSONValue!T(parseJSON(data));
 }
 
 unittest
@@ -104,7 +147,7 @@ unittest
     JSONValue expect1;
     expect1["key"] = "ABCD";
     expect1["value"] = 100;
-    assert(data1.toJSONValue == expect1);
+    assert(data1.serializeToJSONValue == expect1);
 
     struct KeyValue2
     {
@@ -117,9 +160,36 @@ unittest
     JSONValue expect2;
     expect2["name"] = "ABCD";
     expect2["value"] = 200;
-    assert(data1.toJSONValue == expect1);
+    assert(data2.serializeToJSONValue == expect2);
 
     // Deserialization
-    assert(fromJSONValue!KeyValue1(expect1) == data1);
-    
+    assert(deserializeJSONValue!KeyValue1(expect1) == data1);
+
+    struct KeyValue3
+    {
+        string key;
+        Nullable!int value1;
+        Nullable!int value2;
+    }
+
+    auto data3 = KeyValue3("ABCD", 200.nullable);
+    JSONValue expect3;
+    expect3["key"] = "ABCD";
+    expect3["value1"] = 200;
+    assert(data3.serializeToJSONValue == expect3);
+
+    // Array of Struct
+    auto data4 = [KeyValue1("ABCD", 100), KeyValue1("EFGH", 200)];
+    JSONValue expect4 = JSONValue.emptyArray;
+    JSONValue a;
+    a["key"] = "ABCD";
+    a["value"] = 100;
+    expect4.array ~= a;
+
+    JSONValue b;
+    b["key"] = "EFGH";
+    b["value"] = 200;
+    expect4.array ~= b;
+
+    assert(data4.serializeToJSONValue == expect4);
 }
