@@ -57,31 +57,6 @@ bool isJSONFieldIgnored(T, string member)()
     return hasUDA!(__traits(getMember, T, member), JSONFieldIgnore);
 }
 
-string nullableType(T)()
-{
-    alias types = AliasSeq!(
-        bool,
-        short,
-        ushort,
-        int,
-        uint,
-        long,
-        ulong,
-        char,
-        float,
-        double,
-        real,
-        string
-    );
-
-    foreach(t; types)
-    {
-        if (is(T == Nullable!t))
-            return t.stringof;
-    }
-    return "string";
-}
-
 JSONValue serializeToJSONValue(T)(T data)
 {
     static if (isArray!(T))
@@ -92,6 +67,8 @@ JSONValue serializeToJSONValue(T)(T data)
 
         return output;
     }
+    else static if (isAssociativeArray!(T))
+        return JSONValue(data);
     else
     {
         JSONValue result;
@@ -192,4 +169,5 @@ unittest
     expect4.array ~= b;
 
     assert(data4.serializeToJSONValue == expect4);
+    assert(["name": "ABCD"].serializeToJSONValueString == `{"name":"ABCD"}`);
 }
